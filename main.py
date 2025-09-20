@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from google import genai
 from dotenv import load_dotenv
 import uvicorn
+import json
 
 # Import the PDF generation router
 from genpdf.pdf_api import router as pdf_router
@@ -36,7 +37,31 @@ def getwebcontent(url: str):
     try:
         response = requests.get(full_url)
         response.raise_for_status()
-        return {"content": response.text}
+        resp = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=f"""
+        Extract and summarize the following website content into a structured JSON CV with these fields:
+        - personal_information
+        - professional_summary
+        - education
+        - work_experience
+        - skills
+        - projects
+        - certifications
+        - publications
+        - awards
+        - languages
+        - volunteer
+        - conferences
+        - memberships
+        - references
+
+        Return only valid JSON, no extra text.
+        Content: {response.text}
+        """
+    )
+        
+        return {"content": resp.text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
