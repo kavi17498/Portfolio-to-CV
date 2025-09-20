@@ -136,19 +136,7 @@ def getwebcontent(url: str, format: str = "json"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class Message(BaseModel):
-    text: str
 
-@app.post("/sayhi")
-def say_hi(message: Message):
-    try:
-        resp = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=f"Say hi to: {message.text}"
-        )
-        return {"reply": resp.text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 def generatepdf(cv_data):
     try:
