@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
 from pydantic import BaseModel
@@ -7,6 +8,12 @@ from google import genai
 from dotenv import load_dotenv
 import uvicorn
 import json
+from pdf_generator import generatepdf
+
+# Pydantic model for CV data input
+class CVDataRequest(BaseModel):
+    cv_data: dict
+    filename: str = None
 
 # Import the PDF generation router
 try:
@@ -26,11 +33,53 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = FastAPI()
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Include the PDF generation router
 if pdf_router:
     app.include_router(pdf_router)
 
 baseURL = "https://r.jina.ai/"
+
+@app.post("/generate-pdf")
+def generate_pdf_from_data(request: CVDataRequest):
+    """
+    Generate PDF from provided CV data
+    
+    Args:
+        request: CVDataRequest containing cv_data and optional filename
+        
+    Returns:
+        StreamingResponse: PDF file as downloadable attachment
+    """
+    try:
+        cv_data = request.cv_data
+        
+        # Generate PDF
+        pdf_buffer = generatepdf(cv_data)
+        
+        # Determine filename
+        if request.filename:
+            filename = request.filename if request.filename.endswith('.pdf') else f"{request.filename}.pdf"
+        else:
+            name = cv_data.get('personal_information', {}).get('name', 'CV')
+            filename = f"{name.replace(' ', '_')}_CV.pdf"
+        
+        return StreamingResponse(
+            iter([pdf_buffer.read()]),
+            media_type='application/pdf',
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 @app.get("/scrape/{url:path}")
 def getwebcontent(url: str, format: str = "json"):
@@ -136,65 +185,6 @@ def getwebcontent(url: str, format: str = "json"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-
-def generatepdf(cv_data):
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.colors import navy
-        from io import BytesIO
-        
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
-        styles = getSampleStyleSheet()
-        
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, 
-                                   spaceAfter=30, textColor=navy, alignment=TA_CENTER)
-        
-        elements = []
-        
-        # Personal Info
-        personal = cv_data.get('personal_information', {})
-        name = personal.get('name', 'CV')
-        elements.append(Paragraph(name, title_style))
-        
-        if personal.get('email'):
-            elements.append(Paragraph(f"Email: {personal['email']}", styles['Normal']))
-        if personal.get('phone'):
-            elements.append(Paragraph(f"Phone: {personal['phone']}", styles['Normal']))
-        
-        elements.append(Spacer(1, 20))
-        
-        # Professional Summary
-        if cv_data.get('professional_summary'):
-            elements.append(Paragraph("Professional Summary", styles['Heading2']))
-            elements.append(Paragraph(cv_data['professional_summary'], styles['Normal']))
-            elements.append(Spacer(1, 12))
-        
-        # Skills
-        if cv_data.get('skills'):
-            elements.append(Paragraph("Skills", styles['Heading2']))
-            skills_text = " • ".join(cv_data['skills'])
-            elements.append(Paragraph(skills_text, styles['Normal']))
-            elements.append(Spacer(1, 12))
-        
-        # Projects
-        if cv_data.get('projects'):
-            elements.append(Paragraph("Projects", styles['Heading2']))
-            for project in cv_data['projects']:
-                elements.append(Paragraph(f"<b>{project.get('name', 'Project')}</b>", styles['Heading3']))
-                if project.get('description'):
-                    elements.append(Paragraph(project['description'], styles['Normal']))
-                elements.append(Spacer(1, 8))
-        
-        doc.build(elements)
-        buffer.seek(0)
-        return buffer
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
