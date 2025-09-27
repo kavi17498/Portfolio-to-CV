@@ -31,6 +31,10 @@ if not GEMINI_API_KEY:
 # ✅ Correct client initialization
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+
+
+
+
 app = FastAPI()
 
 # Add CORS middleware
@@ -83,13 +87,14 @@ def generate_pdf_from_data(request: CVDataRequest):
 
 @app.get("/scrape/{url:path}")
 def getwebcontent(url: str, format: str = "json"):
+    
     full_url = baseURL + url
     try:
         response = requests.get(full_url)
         response.raise_for_status()
         
         resp = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             contents=f"""
             Extract and summarize the following website content into a structured JSON CV with these fields:
             - personal_information (object with name, email, phone, address, linkedin, github, website)
@@ -149,28 +154,28 @@ def getwebcontent(url: str, format: str = "json"):
                 )
             
             return {
-                "message": "CV data extracted and stored successfully",
-                "session_id": session_id,
-                "raw_content": resp.text,
+                # "message": "CV data extracted and stored successfully",
+                # "session_id": session_id,
+                # "raw_content": resp.text,
                 "parsed_data": cv_data,
-                "parsed_fields": list(cv_data.keys()),
-                "access_endpoints": {
-                    "personal_information": f"/genpdf/personal-information",
-                    "professional_summary": f"/genpdf/professional-summary", 
-                    "education": f"/genpdf/education",
-                    "work_experience": f"/genpdf/work-experience",
-                    "skills": f"/genpdf/skills",
-                    "projects": f"/genpdf/projects",
-                    "certifications": f"/genpdf/certifications",
-                    "publications": f"/genpdf/publications",
-                    "awards": f"/genpdf/awards",
-                    "languages": f"/genpdf/languages",
-                    "volunteer": f"/genpdf/volunteer",
-                    "conferences": f"/genpdf/conferences",
-                    "memberships": f"/genpdf/memberships",
-                    "references": f"/genpdf/references",
-                    "all_fields": f"/genpdf/all-fields"
-                }
+                # "parsed_fields": list(cv_data.keys()),
+                # "access_endpoints": {
+                #     "personal_information": f"/genpdf/personal-information",
+                #     "professional_summary": f"/genpdf/professional-summary", 
+                #     "education": f"/genpdf/education",
+                #     "work_experience": f"/genpdf/work-experience",
+                #     "skills": f"/genpdf/skills",
+                #     "projects": f"/genpdf/projects",
+                #     "certifications": f"/genpdf/certifications",
+                #     "publications": f"/genpdf/publications",
+                #     "awards": f"/genpdf/awards",
+                #     "languages": f"/genpdf/languages",
+                #     "volunteer": f"/genpdf/volunteer",
+                #     "conferences": f"/genpdf/conferences",
+                #     "memberships": f"/genpdf/memberships",
+                #     "references": f"/genpdf/references",
+                #     "all_fields": f"/genpdf/all-fields"
+                # }
             }
         except json.JSONDecodeError as e:
             # If parsing fails, return raw content with more details
