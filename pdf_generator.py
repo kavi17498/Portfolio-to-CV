@@ -1,8 +1,9 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.colors import navy
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+from reportlab.lib.colors import black, darkblue, grey
+from reportlab.lib.units import inch
 from io import BytesIO
 from fastapi import HTTPException
 
@@ -18,95 +19,211 @@ def generatepdf(cv_data):
     """
     try:
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        # ATS-friendly document setup with proper margins
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=A4,
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch
+        )
         styles = getSampleStyleSheet()
         
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, 
-                                   spaceAfter=30, textColor=navy, alignment=TA_CENTER)
+        # ATS-Friendly Style Definitions
+        name_style = ParagraphStyle(
+            'NameStyle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=4,
+            textColor=black,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        contact_style = ParagraphStyle(
+            'ContactStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            spaceAfter=2,
+            textColor=black,
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+        
+        section_style = ParagraphStyle(
+            'SectionStyle',
+            parent=styles['Heading2'],
+            fontSize=11,
+            spaceBefore=10,
+            spaceAfter=4,
+            textColor=black,
+            fontName='Helvetica-Bold',
+            borderWidth=1,
+            borderColor=black,
+            borderPadding=2,
+            leftIndent=0
+        )
+        
+        content_style = ParagraphStyle(
+            'ContentStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            spaceAfter=4,
+            textColor=black,
+            alignment=TA_JUSTIFY,
+            fontName='Helvetica'
+        )
+        
+        job_title_style = ParagraphStyle(
+            'JobTitleStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=2,
+            textColor=black,
+            fontName='Helvetica-Bold'
+        )
+        
+        company_style = ParagraphStyle(
+            'CompanyStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            spaceAfter=4,
+            textColor=black,
+            fontName='Helvetica'
+        )
         
         elements = []
         
-        # Personal Info
+        # Header Section - ATS Friendly
         personal = cv_data.get('personal_information', {})
         name = personal.get('name', 'CV')
-        elements.append(Paragraph(name, title_style))
+        elements.append(Paragraph(name, name_style))
         
+        # Contact Information - Single line format preferred by ATS
+        contact_info = []
         if personal.get('email'):
-            elements.append(Paragraph(f"Email: {personal['email']}", styles['Normal']))
+            contact_info.append(personal['email'])
         if personal.get('phone'):
-            elements.append(Paragraph(f"Phone: {personal['phone']}", styles['Normal']))
+            contact_info.append(personal['phone'])
         if personal.get('address'):
-            elements.append(Paragraph(f"Address: {personal['address']}", styles['Normal']))
+            contact_info.append(personal['address'])
+        
+        if contact_info:
+            elements.append(Paragraph(" | ".join(contact_info), contact_style))
+        
+        # Professional Links
+        links = []
+        if personal.get('linkedin'):
+            links.append(f"LinkedIn: {personal['linkedin']}")
+        if personal.get('github'):
+            links.append(f"GitHub: {personal['github']}")
         if personal.get('website'):
-            elements.append(Paragraph(f"Website: {personal['website']}", styles['Normal']))
+            links.append(f"Website: {personal['website']}")
         
-        elements.append(Spacer(1, 20))
+        if links:
+            elements.append(Paragraph(" | ".join(links), contact_style))
         
-        # Professional Summary
+        elements.append(Spacer(1, 12))
+        
+        # Professional Summary - ATS Optimized
         if cv_data.get('professional_summary'):
-            elements.append(Paragraph("Professional Summary", styles['Heading2']))
-            elements.append(Paragraph(cv_data['professional_summary'], styles['Normal']))
-            elements.append(Spacer(1, 12))
+            elements.append(Paragraph("PROFESSIONAL SUMMARY", section_style))
+            elements.append(Paragraph(cv_data['professional_summary'], content_style))
+            elements.append(Spacer(1, 8))
         
-        # Skills
+        # Core Competencies - ATS Friendly Skills Section
         if cv_data.get('skills'):
-            elements.append(Paragraph("Skills", styles['Heading2']))
-            skills_text = " • ".join(cv_data['skills'])
-            elements.append(Paragraph(skills_text, styles['Normal']))
-            elements.append(Spacer(1, 12))
+            elements.append(Paragraph("CORE COMPETENCIES", section_style))
+            # Comma-separated format is better for ATS parsing
+            skills_text = ", ".join(cv_data['skills'])
+            elements.append(Paragraph(skills_text, content_style))
+            elements.append(Spacer(1, 8))
         
-        # Projects
+        # Key Projects - ATS Friendly Format
         if cv_data.get('projects'):
-            elements.append(Paragraph("Projects", styles['Heading2']))
+            elements.append(Paragraph("KEY PROJECTS", section_style))
             for project in cv_data['projects']:
-                elements.append(Paragraph(f"<b>{project.get('name', 'Project')}</b>", styles['Heading3']))
+                project_name = project.get('name', 'Project')
+                elements.append(Paragraph(f"<b>{project_name}</b>", job_title_style))
+                
                 if project.get('description'):
-                    elements.append(Paragraph(project['description'], styles['Normal']))
+                    elements.append(Paragraph(project['description'], content_style))
+                
                 if project.get('technologies'):
-                    tech_text = f"Technologies: {', '.join(project['technologies'])}"
-                    elements.append(Paragraph(tech_text, styles['Normal']))
-                elements.append(Spacer(1, 8))
+                    tech_text = f"<b>Technologies:</b> {', '.join(project['technologies'])}"
+                    elements.append(Paragraph(tech_text, content_style))
+                
+                if project.get('link'):
+                    elements.append(Paragraph(f"<b>Link:</b> {project['link']}", content_style))
+                    
+                elements.append(Spacer(1, 6))
         
-        # Work Experience
+        # Professional Experience - ATS Optimized Format
         if cv_data.get('work_experience'):
-            elements.append(Paragraph("Work Experience", styles['Heading2']))
+            elements.append(Paragraph("PROFESSIONAL EXPERIENCE", section_style))
             for job in cv_data['work_experience']:
-                job_title = f"<b>{job.get('position', 'Position')}</b> at {job.get('company', 'Company')}"
-                if job.get('duration'):
-                    job_title += f" ({job['duration']})"
-                elements.append(Paragraph(job_title, styles['Heading3']))
+                # Separate job title and company for better ATS parsing
+                position = job.get('position', 'Position')
+                company = job.get('company', 'Company')
+                duration = job.get('duration', '')
+                
+                elements.append(Paragraph(f"<b>{position}</b>", job_title_style))
+                company_line = f"{company}"
+                if duration:
+                    company_line += f" | {duration}"
+                elements.append(Paragraph(company_line, company_style))
                 
                 if job.get('responsibilities'):
                     for resp in job['responsibilities']:
-                        elements.append(Paragraph(f"• {resp}", styles['Normal']))
-                elements.append(Spacer(1, 8))
-        
-        # Education
-        if cv_data.get('education'):
-            elements.append(Paragraph("Education", styles['Heading2']))
-            for edu in cv_data['education']:
-                edu_text = f"<b>{edu.get('degree', 'Degree')}</b>"
-                if edu.get('institution'):
-                    edu_text += f" - {edu['institution']}"
-                if edu.get('graduation_year'):
-                    edu_text += f" ({edu['graduation_year']})"
-                elements.append(Paragraph(edu_text, styles['Normal']))
+                        elements.append(Paragraph(f"• {resp}", content_style))
                 elements.append(Spacer(1, 6))
         
-        # Additional sections
+        # Education - ATS Optimized
+        if cv_data.get('education'):
+            elements.append(Paragraph("EDUCATION", section_style))
+            for edu in cv_data['education']:
+                degree = edu.get('degree', 'Degree')
+                institution = edu.get('institution', '')
+                year = edu.get('graduation_year', '')
+                gpa = edu.get('gpa', '')
+                
+                elements.append(Paragraph(f"<b>{degree}</b>", job_title_style))
+                
+                edu_details = []
+                if institution:
+                    edu_details.append(institution)
+                if year:
+                    edu_details.append(year)
+                if gpa:
+                    edu_details.append(f"GPA: {gpa}")
+                
+                if edu_details:
+                    elements.append(Paragraph(" | ".join(edu_details), company_style))
+                elements.append(Spacer(1, 4))
+        
+        # Additional Sections - ATS Friendly
         additional_sections = [
-            ('certifications', 'Certifications'),
-            ('awards', 'Awards'),
-            ('languages', 'Languages')
+            ('certifications', 'CERTIFICATIONS'),
+            ('awards', 'AWARDS & ACHIEVEMENTS'),
+            ('languages', 'LANGUAGES'),
+            ('publications', 'PUBLICATIONS'),
+            ('volunteer', 'VOLUNTEER EXPERIENCE'),
+            ('conferences', 'CONFERENCES'),
+            ('memberships', 'PROFESSIONAL MEMBERSHIPS')
         ]
         
         for key, title in additional_sections:
             data = cv_data.get(key, [])
             if data:
-                elements.append(Paragraph(title, styles['Heading2']))
-                for item in data:
-                    elements.append(Paragraph(f"• {item}", styles['Normal']))
-                elements.append(Spacer(1, 12))
+                elements.append(Paragraph(title, section_style))
+                # Use comma separation for better ATS parsing on skills-like sections
+                if key in ['languages', 'certifications']:
+                    elements.append(Paragraph(", ".join(data), content_style))
+                else:
+                    for item in data:
+                        elements.append(Paragraph(f"• {item}", content_style))
+                elements.append(Spacer(1, 6))
         
         doc.build(elements)
         buffer.seek(0)
